@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "__config": "cpp",
+        "__nullptr": "cpp"
+    },
+    "clang.cxxflags": ["-std=c++11", "-I/Developer/NVIDIA/CUDA-8.0/include"]
+}
