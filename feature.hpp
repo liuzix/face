@@ -16,7 +16,7 @@ class Feature {
 public:
     uchar x1, y1, x2, y2;
 
-    __device__ int compute(Sample& sample);
+    __host__ __device__ int compute(Sample& sample);
 
     Feature(uchar _x1, uchar _y1, uchar _x2, uchar _y2) {
         x1 = _x1;

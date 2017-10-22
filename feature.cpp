@@ -4,7 +4,7 @@
 #include "feature.hpp"
 #include "adaboost.hpp"
 
-__device__ int Feature::compute(Sample& sample) {
+__host__ __device__ int Feature::compute(Sample& sample) {
     unsigned int s1 = sample.at(x2, y2);
     unsigned int s2 = sample.at((x1 + x2) / 2, y1);
     unsigned int s3 = sample.at(x2, y1);

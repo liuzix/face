@@ -14,8 +14,6 @@ public:
     int y;
 
     explicit Sample (JPEGImage& jpeg, int _y) {
-        //CHECK(cudaMalloc(&this->data, sizeof(unsigned int) * jpeg.dimX * jpeg.dimY));
-        //CHECK(cudaMemcpy(this->data, jpeg.integral, sizeof(unsigned int) * jpeg.dimX * jpeg.dimY, cudaMemcpyDeviceToDevice));
         this->dimX = jpeg.dimX;
         this->dimY = jpeg.dimY;
         this->data = jpeg.integral;
@@ -31,7 +29,7 @@ public:
 struct DecisionStump : public Managed {
     float threshold = 23333;
     char polarity = 1;
-    int weight = 1;
+    float weight = 1.0;
     Feature* feature;
 
     /* returns weighted decision on a sample */
@@ -45,9 +43,7 @@ struct DecisionStump : public Managed {
 struct Classifier {
     std::vector<DecisionStump> weakLearners;
     int threshold;
-
-    // TODO: 
-    // int classify (Sample& sample)
+    int classify (Sample& sample);
 };
 
 

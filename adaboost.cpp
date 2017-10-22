@@ -37,7 +37,7 @@ __global__ void evalOneFeature(size_t offset, DecisionStump* result, float* loss
     weightValuePair* wvBuf = wvBufs + (blockIdx.x * THREADS_PER_BLOCK + threadIdx.x) * NUM_IMAGES;
 
     for (int i = 0; i < NUM_IMAGES; i++) {
-        keyBuf[i] = weights[i] * features[index].compute(samples[i]);
+        keyBuf[i] = features[index].compute(samples[i]);
         wvBuf[i] = {.v = (char)samples[i].y, .weight = weights[i]};
     }
 
@@ -86,10 +86,9 @@ __global__ void evalOneFeature(size_t offset, DecisionStump* result, float* loss
 
 
 
-Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& features) {
+Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d_features) {
     std::cout << "Sample size = " << samples.size() << std::endl;
     device_vector<Sample> d_samples = samples;
-    device_vector<Feature> d_features = features;
     device_vector<float> d_weights(samples.size(), 1);
     cudaDeviceSynchronize();
     Classifier ret;
@@ -99,28 +98,27 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& f
     for (int t = 0; t < 100; t++) {
 
         std::cout << "Adaboost: t = " << t << std::endl;
-        DecisionStump* results = new DecisionStump[features.size()];
+        DecisionStump* results = new DecisionStump[d_features.size()];
         float* loss;
-        CHECK(cudaMallocManaged(&loss, sizeof(float) * features.size()));
+        CHECK(cudaMallocManaged(&loss, sizeof(float) * d_features.size()));
         float* keyBufs;
         weightValuePair* wvBufs;
-        CHECK(cudaMalloc(&keyBufs, sizeof(float) * (features.size() / SPLIT_NUM) * NUM_IMAGES));
-        CHECK(cudaMalloc(&wvBufs, sizeof(weightValuePair) * (features.size() / SPLIT_NUM) * NUM_IMAGES));
+        CHECK(cudaMalloc(&keyBufs, sizeof(float) * (d_features.size() / SPLIT_NUM) * NUM_IMAGES));
+        CHECK(cudaMalloc(&wvBufs, sizeof(weightValuePair) * (d_features.size() / SPLIT_NUM) * NUM_IMAGES));
 
-        float* weights_p = thrust::raw_pointer_cast(d_weights.data());
         for (int i = 0; i < SPLIT_NUM + 1; i++) {
 
 
             printf("i = %d \n", i);
 
 
-            size_t offset = (features.size() / SPLIT_NUM) * i;
+            size_t offset = (d_features.size() / SPLIT_NUM) * i;
             evalOneFeature <<< 
-                ceil(((double)features.size() / SPLIT_NUM) / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
+                ceil(((double)d_features.size() / SPLIT_NUM) / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
                 >>> (offset, results, loss, thrust::raw_pointer_cast(d_features.data()), 
                                     thrust::raw_pointer_cast(d_samples.data()),
                                     thrust::raw_pointer_cast(d_weights.data()),
-                                    features.size(),
+                                    d_features.size(),
                                     keyBufs,
                                     wvBufs);
             
@@ -132,29 +130,39 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& f
         cudaFree(wvBufs);
 
 
-        thrust::sort_by_key(thrust::device, loss, loss + features.size(), results);
+        thrust::sort_by_key(thrust::device, loss, loss + d_features.size(), results);
         cudaDeviceSynchronize();
         CHECK(cudaPeekAtLastError());
         DecisionStump h_t = results[0];
-        float sumWeight = thrust::reduce(thrust::device, weights_p, weights_p + samples.size());
+        std::cout << h_t.threshold << std::endl;
+
+        host_vector<float> h_weights = d_weights;
+        float sumWeight = thrust::reduce(thrust::host, h_weights.begin(), h_weights.end());
         float normLoss = loss[0] / sumWeight;
         std::cout << "normalized loss = " << normLoss << std::endl;
-        /*h_t.weight = 0.5 * log((1 - normLoss)/ normLoss);
+        std::cout << "prelog = " << (1.0 - normLoss) / normLoss << std::endl;
+        h_t.weight = 0.5 * logf((1.0 - normLoss) / normLoss);
+        std::cout << "alpha = " << h_t.weight << std::endl;
         ret.weakLearners.push_back(h_t);
 
-        float Z_t = 2 * sqrtf(normLoss * (1 - normLoss));
+        float Z_t = 2.0 * sqrtf(normLoss * (1 - normLoss));
 
         cudaDeviceSynchronize();
         thrust::transform(thrust::device, d_weights.begin(), d_weights.end(), d_samples.begin(), d_weights.begin(),
         [=] __device__ (float D_t, Sample x_i) {
-            return D_t * expf(-h_t.weight * x_i.y * h_t.compute(x_i));
+            return D_t * expf(-h_t.weight * x_i.y * h_t.compute(x_i)) / Z_t;
         });
         cudaDeviceSynchronize();
-        for (int i = 0; i < NUM_IMAGES; i++)
-            std::cout << d_weights[i] << std::endl;
-*/
+
         delete[] results;
     }
 
     return ret;
+}
+
+
+
+int Classifier::classify (Sample& sample) {
+    device_vector<DecisionStump> d_stumps = this->weakLearners;
+
 }
