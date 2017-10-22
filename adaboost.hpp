@@ -32,7 +32,7 @@ struct DecisionStump : public Managed {
     float weight = 1.0;
     Feature* feature;
 
-    /* returns weighted decision on a sample */
+    /* returns unweighted decision on a sample */
     __device__ inline int compute(Sample& sample) const {
         int f = feature->compute(sample);
         int v = f > threshold ? 1 : -1;
@@ -43,7 +43,7 @@ struct DecisionStump : public Managed {
 struct Classifier {
     std::vector<DecisionStump> weakLearners;
     int threshold;
-    int classify (Sample& sample);
+    std::vector<float> classify (device_vector<Sample>& samples);
 };
 
 

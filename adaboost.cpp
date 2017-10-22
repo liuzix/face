@@ -95,7 +95,7 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
 
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)((double)1.5 * 1024 * 1024 * 1024)); // limit = 1.5B
 
-    for (int t = 0; t < 100; t++) {
+    for (int t = 0; t < 10; t++) {
 
         std::cout << "Adaboost: t = " << t << std::endl;
         DecisionStump* results = new DecisionStump[d_features.size()];
@@ -134,13 +134,11 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
         cudaDeviceSynchronize();
         CHECK(cudaPeekAtLastError());
         DecisionStump h_t = results[0];
-        std::cout << h_t.threshold << std::endl;
 
         host_vector<float> h_weights = d_weights;
         float sumWeight = thrust::reduce(thrust::host, h_weights.begin(), h_weights.end());
         float normLoss = loss[0] / sumWeight;
         std::cout << "normalized loss = " << normLoss << std::endl;
-        std::cout << "prelog = " << (1.0 - normLoss) / normLoss << std::endl;
         h_t.weight = 0.5 * logf((1.0 - normLoss) / normLoss);
         std::cout << "alpha = " << h_t.weight << std::endl;
         ret.weakLearners.push_back(h_t);
@@ -155,14 +153,43 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
         cudaDeviceSynchronize();
 
         delete[] results;
+
+        ret.classify(d_samples);
     }
 
     return ret;
 }
 
+__global__ void doClassify (Sample* samples, int nSamples, DecisionStump* stumps, int nStumps, float* results) {
+    int index = blockIdx.x * THREADS_PER_BLOCK + threadIdx.x;
+    if (index > nSamples) return;
 
+    float sum = 0.0;
+    for (int i = 0; i < nStumps; i++) {
+        sum += (float) stumps[i].compute(samples[index]) * stumps[i].weight;
+    }
 
-int Classifier::classify (Sample& sample) {
+    results[index] = sum;
+}
+
+std::vector<float> Classifier::classify (device_vector<Sample>& samples) {
     device_vector<DecisionStump> d_stumps = this->weakLearners;
+    device_vector<float> res(samples.size(), 233.3);
 
+    doClassify <<< ceilf((float)samples.size() / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
+               >>> (thrust::raw_pointer_cast(samples.data()), 
+                    samples.size(),
+                    thrust::raw_pointer_cast(d_stumps.data()),
+                    d_stumps.size(),
+                    thrust::raw_pointer_cast(res.data()));
+    
+    cudaDeviceSynchronize();
+    CHECK(cudaPeekAtLastError());     
+    
+    for (int i = 0; i < samples.size(); i++) {
+        std::cout << res[i] << std::endl;
+    }
+
+    std::vector<float> ret (res.begin(), res.end());
+    return ret;
 }

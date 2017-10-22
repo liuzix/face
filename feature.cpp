@@ -24,10 +24,10 @@ __host__ __device__ int Feature::compute(Sample& sample) {
 device_vector<Feature> Feature::generate(int dimX, int dimY) {
     std::vector<Feature> ret;
     ret.reserve(dimX * dimY * dimX);
-    for (int x1 = 0; x1 < dimX; x1+=2) {
-        for (int y1 = 0; y1 < dimY; y1+=2) {
-            for (int x2 = x1 + 2; x2 < dimX; x2+=2) {
-                for (int y2 = y1 + 2; y2 < dimY; y2+=2) {
+    for (int x1 = 0; x1 < dimX; x1+=3) {
+        for (int y1 = 0; y1 < dimY; y1+=3) {
+            for (int x2 = x1 + 2; x2 < dimX; x2+=3) {
+                for (int y2 = y1 + 2; y2 < dimY; y2+=3) {
                     Feature f(x1, y1, x2, y2);
                     ret.push_back(f);
                 }
