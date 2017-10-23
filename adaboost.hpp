@@ -2,6 +2,7 @@
 #define ADABOOST_H
 
 #include <vector>
+#include <cassert>
 
 #include "cudaManaged.hpp"
 #include "jpeg.hpp"
@@ -14,6 +15,7 @@ public:
     int y;
 
     explicit Sample (JPEGImage& jpeg, int _y) {
+        assert(jpeg.integrated);
         this->dimX = jpeg.dimX;
         this->dimY = jpeg.dimY;
         this->data = jpeg.integral;

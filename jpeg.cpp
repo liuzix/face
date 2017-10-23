@@ -4,7 +4,7 @@
 #include <iostream>
 #include <CImg.h>
 #include <cuda_runtime.h>
-#include <device_launch_parameters.h>
+
 
 #include "cudaManaged.hpp"
 
@@ -55,6 +55,7 @@ __host__ __device__ void JPEGImage::integrate() {
             }
         }
     }
+    this->integrated = true;
 }
 
 JPEGImage::~JPEGImage () {
@@ -65,9 +66,3 @@ JPEGImage::~JPEGImage () {
     cudaFree(this->integral);
 }
 
-/* The cuda kernel for transforming all images to greyscale */
-__global__ void batchToGray(JPEGImage* input) {
-    int index = threadIdx.x + blockIdx.x;
-    input[index].toGray();
-    input[index].integrate();
-}

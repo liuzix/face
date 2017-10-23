@@ -15,6 +15,7 @@ private:
     unsigned char* grayScaleData = nullptr;
     unsigned int* rows = nullptr;
     unsigned int* integral = nullptr;
+    bool integrated = false;
 public:
     friend class Sample;
     int dimX = 0;

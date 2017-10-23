@@ -1,13 +1,14 @@
 #include <iostream>
 #include <string>
 #include <cuda.h>
-
+#include <math.h>
+#include <device_launch_parameters.h>
 
 #include "jpeg.hpp"
 #include "feature.hpp"
 #include "adaboost.hpp"
 
-#define NUM_IMAGES 500
+#define NUM_IMAGES 750
 #define THREADS_PER_BLOCK 500
 
 using namespace std;
@@ -21,24 +22,32 @@ void loadImages () {
         faces[i].load((string("faces/face") + to_string(i) + ".jpg").c_str());
     }
 
-    batchToGray <<< NUM_IMAGES / THREADS_PER_BLOCK, THREADS_PER_BLOCK >>> (faces);
+    batchToGray <<< ceilf((float)NUM_IMAGES / THREADS_PER_BLOCK), THREADS_PER_BLOCK >>> (faces);
 
     nonfaces = new JPEGImage[NUM_IMAGES];
     for (int i = 0; i < NUM_IMAGES; i++) {
         nonfaces[i].load((string("background/") + to_string(i) + ".jpg").c_str());
     }
 
-    batchToGray <<< NUM_IMAGES / THREADS_PER_BLOCK, THREADS_PER_BLOCK >>> (nonfaces);
+    batchToGray <<< ceilf((float)NUM_IMAGES / THREADS_PER_BLOCK), THREADS_PER_BLOCK >>> (nonfaces);
 
     cudaDeviceSynchronize();
     
 
 }
 
+/* The cuda kernel for transforming all images to greyscale */
+__global__ void batchToGray(JPEGImage* input) {
+    int index = threadIdx.x + THREADS_PER_BLOCK * blockIdx.x;
+    if (index >  NUM_IMAGES ) return;
+    input[index].toGray();
+    input[index].integrate();
+}
+
 int main () {
     int deviceCount = 0;
     cudaGetDeviceCount(&deviceCount);
-
+    cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)((double)1.5 * 1024 * 1024 * 1024)); // limit = 1.5B
     cout << "Number of devices: " << deviceCount << endl;
     cout << "Loading and integrating images..." << endl;
     loadImages();

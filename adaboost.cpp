@@ -8,7 +8,6 @@
 #include <device_launch_parameters.h>
 #include <cmath>
 
-#define NUM_IMAGES 1000
 #define THREADS_PER_BLOCK 512
 
 #define SPLIT_NUM 10
@@ -77,7 +76,6 @@ __global__ void evalOneFeature(size_t offset, DecisionStump* result, float* loss
 
     result[index].feature = &features[index];
     result[index].threshold = keyBuf[min_index];
-    assert(min_epsilon != 0);
     result[index].polarity = min_polarity;
     loss[index] = min_epsilon;
 }
@@ -92,14 +90,16 @@ float Classifier::getErrorRate(std::vector<Sample>& samples, std::vector<float> 
     }
 
     int falsePos = 0;
+    int allNeg = 0;
     for (int i = 0; i < samples.size(); i++) {
+        if (samples[i].y < 0) allNeg++;
         if (samples[i].y < 0 && results[i] > threshold) { // if this is a false positive
             falsePos ++;
         }
     } 
     
     this->threshold = threshold;
-    this->falsePositiveRate = (float)falsePos / samples.size();
+    this->falsePositiveRate = (float)falsePos / allNeg;
 
     return this->falsePositiveRate;
 
@@ -113,7 +113,7 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
     cudaDeviceSynchronize();
     Classifier ret;
 
-    cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)((double)1.5 * 1024 * 1024 * 1024)); // limit = 1.5B
+    
 
     for (int t = 0; t < 100; t++) {
 
@@ -134,7 +134,7 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
 
             size_t offset = (d_features.size() / SPLIT_NUM) * i;
             evalOneFeature <<< 
-                ceil(((double)d_features.size() / SPLIT_NUM) / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
+                ceilf(((float)d_features.size() / SPLIT_NUM) / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
                 >>> (offset, results, loss, thrust::raw_pointer_cast(d_features.data()), 
                                     thrust::raw_pointer_cast(d_samples.data()),
                                     samples.size(),
@@ -158,11 +158,13 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
 
         host_vector<float> h_weights = d_weights;
         float sumWeight = thrust::reduce(thrust::host, h_weights.begin(), h_weights.end());
-        float normLoss = loss[0] / sumWeight;
+        float normLoss = (loss[0] > 0) ? (loss[0] / sumWeight) : 0.01 ;
         h_t.weight = 0.5 * logf((1.0 - normLoss) / normLoss);
+
         ret.weakLearners.push_back(h_t);
 
         float Z_t = 2.0 * sqrtf(normLoss * (1 - normLoss));
+        assert(Z_t != 0);
 
         cudaDeviceSynchronize();
         thrust::transform(thrust::device, d_weights.begin(), d_weights.end(), d_samples.begin(), d_weights.begin(),
@@ -175,11 +177,15 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
 
         auto test_res = ret.classify(d_samples);
 
+        for (float f: test_res) {
+            std::cout << f << std::endl;
+        }
+
         float fpRate = ret.getErrorRate(samples, test_res);
 
         std::cout << "false positive rate = " << fpRate << std::endl;
 
-        if (fpRate <= 0.05) break;
+        if (fpRate <= 0.3 && t > 2) break;
     }
 
     return ret;
