@@ -33,6 +33,21 @@ public:
 
     explicit JPEGImage (CImg<unsigned char>& image, int x1, int y1);
 
+    JPEGImage (JPEGImage && other) {
+        originalData = other.originalData;
+        grayScaleData = other.grayScaleData;
+        rows = other.rows;
+        integral = other.integral;
+        integrated = other.integrated;
+        dimX = other.dimX;
+        dimY = other.dimY;
+
+        other.originalData = nullptr;
+        other.grayScaleData = nullptr;
+        other.rows = nullptr;
+        other.integral = nullptr;
+    }
+
     void load (const char* fileName);
 
     __host__ __device__ void toGray();

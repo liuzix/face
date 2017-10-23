@@ -62,10 +62,14 @@ __host__ __device__ void JPEGImage::integrate() {
 
 JPEGImage::~JPEGImage () {
     cudaDeviceSynchronize();
-    cudaFree(this->originalData);
-    cudaFree(this->grayScaleData);
-    cudaFree(this->rows);
-    cudaFree(this->integral);
+    if (this->originalData)
+        cudaFree(this->originalData);
+    if (this->grayScaleData)
+        cudaFree(this->grayScaleData);
+    if (this->rows)
+        cudaFree(this->rows);
+    if (this->integral)
+        cudaFree(this->integral);
     CHECK(cudaPeekAtLastError());
 }
 
