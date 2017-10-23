@@ -57,8 +57,14 @@ int main () {
     }
     cudaDeviceSynchronize();
 
-    cout << "Starting adaboost..." << endl;
-    AdaBoostTrain(samples, features);
+    vector<Classifier> layers;
+
+    for (int i = 0; i < 100; i++) {
+        cout << "Starting adaboost... Round " << i << endl;
+        Classifier new_layer = AdaBoostTrain(samples, features);
+        samples = new_layer.getFaces(samples);
+        cout << "remaining faces: " << samples.size() << endl;
+    }
 
     
     return 0;

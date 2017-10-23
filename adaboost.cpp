@@ -21,6 +21,7 @@ struct weightValuePair {
 __global__ void evalOneFeature(size_t offset, DecisionStump* result, float* loss, 
                                Feature* features, 
                                Sample* samples, 
+                               int nSamples,
                                const float* weights,
                                int numFeatures,
                                float* keyBufs,
@@ -33,20 +34,20 @@ __global__ void evalOneFeature(size_t offset, DecisionStump* result, float* loss
 
 
 
-    float* keyBuf = keyBufs + (blockIdx.x * THREADS_PER_BLOCK + threadIdx.x) * NUM_IMAGES;
-    weightValuePair* wvBuf = wvBufs + (blockIdx.x * THREADS_PER_BLOCK + threadIdx.x) * NUM_IMAGES;
+    float* keyBuf = keyBufs + (blockIdx.x * THREADS_PER_BLOCK + threadIdx.x) * nSamples;
+    weightValuePair* wvBuf = wvBufs + (blockIdx.x * THREADS_PER_BLOCK + threadIdx.x) * nSamples;
 
-    for (int i = 0; i < NUM_IMAGES; i++) {
+    for (int i = 0; i < nSamples; i++) {
         keyBuf[i] = features[index].compute(samples[i]);
         wvBuf[i] = {.v = (char)samples[i].y, .weight = weights[i]};
     }
 
-    __syncthreads();
-    thrust::sort_by_key(thrust::seq, keyBuf, keyBuf + NUM_IMAGES, wvBuf);
+    __syncthreads();  // for better cache locality
+    thrust::sort_by_key(thrust::seq, keyBuf, keyBuf + nSamples, wvBuf);
 
     
     float T_plus = 0, T_minus = 0;
-    for (int i = 0; i < NUM_IMAGES; i++) {
+    for (int i = 0; i < nSamples; i++) {
         if (wvBuf[i].v > 0) T_plus += wvBuf[i].weight;
         else T_minus += wvBuf[i].weight;
     }
@@ -55,7 +56,7 @@ __global__ void evalOneFeature(size_t offset, DecisionStump* result, float* loss
     float min_epsilon = 5000;
     int min_polarity;
     int min_index = 0;
-    for (int i = 0; i < NUM_IMAGES; i++) {
+    for (int i = 0; i < nSamples; i++) {
         float epsilon = S_plus + T_minus - S_minus;
         if (epsilon < min_epsilon) {
             min_epsilon = epsilon;
@@ -74,16 +75,35 @@ __global__ void evalOneFeature(size_t offset, DecisionStump* result, float* loss
         else S_minus += wvBuf[i].weight;
     }
 
-
-    
     result[index].feature = &features[index];
     result[index].threshold = keyBuf[min_index];
     assert(min_epsilon != 0);
     result[index].polarity = min_polarity;
     loss[index] = min_epsilon;
-    //printf("epsilon = %f \n", min_epsilon);
 }
 
+float Classifier::getErrorRate(std::vector<Sample>& samples, std::vector<float> results) {
+    assert(results.size() == samples.size());
+    float threshold = 0;
+    for (int i = 0; i < samples.size(); i++) {
+        if (samples[i].y > 0) {
+            threshold = std::min(threshold, results[i]);
+        }
+    }
+
+    int falsePos = 0;
+    for (int i = 0; i < samples.size(); i++) {
+        if (samples[i].y < 0 && results[i] > threshold) { // if this is a false positive
+            falsePos ++;
+        }
+    } 
+    
+    this->threshold = threshold;
+    this->falsePositiveRate = (float)falsePos / samples.size();
+
+    return this->falsePositiveRate;
+
+}
 
 
 Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d_features) {
@@ -95,7 +115,7 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
 
     cudaDeviceSetLimit(cudaLimitMallocHeapSize, (size_t)((double)1.5 * 1024 * 1024 * 1024)); // limit = 1.5B
 
-    for (int t = 0; t < 10; t++) {
+    for (int t = 0; t < 100; t++) {
 
         std::cout << "Adaboost: t = " << t << std::endl;
         DecisionStump* results = new DecisionStump[d_features.size()];
@@ -103,8 +123,8 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
         CHECK(cudaMallocManaged(&loss, sizeof(float) * d_features.size()));
         float* keyBufs;
         weightValuePair* wvBufs;
-        CHECK(cudaMalloc(&keyBufs, sizeof(float) * (d_features.size() / SPLIT_NUM) * NUM_IMAGES));
-        CHECK(cudaMalloc(&wvBufs, sizeof(weightValuePair) * (d_features.size() / SPLIT_NUM) * NUM_IMAGES));
+        CHECK(cudaMalloc(&keyBufs, sizeof(float) * (d_features.size() / SPLIT_NUM) * samples.size()));
+        CHECK(cudaMalloc(&wvBufs, sizeof(weightValuePair) * (d_features.size() / SPLIT_NUM) * samples.size()));
 
         for (int i = 0; i < SPLIT_NUM + 1; i++) {
 
@@ -117,6 +137,7 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
                 ceil(((double)d_features.size() / SPLIT_NUM) / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
                 >>> (offset, results, loss, thrust::raw_pointer_cast(d_features.data()), 
                                     thrust::raw_pointer_cast(d_samples.data()),
+                                    samples.size(),
                                     thrust::raw_pointer_cast(d_weights.data()),
                                     d_features.size(),
                                     keyBufs,
@@ -138,9 +159,7 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
         host_vector<float> h_weights = d_weights;
         float sumWeight = thrust::reduce(thrust::host, h_weights.begin(), h_weights.end());
         float normLoss = loss[0] / sumWeight;
-        std::cout << "normalized loss = " << normLoss << std::endl;
         h_t.weight = 0.5 * logf((1.0 - normLoss) / normLoss);
-        std::cout << "alpha = " << h_t.weight << std::endl;
         ret.weakLearners.push_back(h_t);
 
         float Z_t = 2.0 * sqrtf(normLoss * (1 - normLoss));
@@ -154,7 +173,13 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
 
         delete[] results;
 
-        ret.classify(d_samples);
+        auto test_res = ret.classify(d_samples);
+
+        float fpRate = ret.getErrorRate(samples, test_res);
+
+        std::cout << "false positive rate = " << fpRate << std::endl;
+
+        if (fpRate <= 0.05) break;
     }
 
     return ret;
@@ -162,7 +187,7 @@ Classifier AdaBoostTrain(std::vector<Sample>& samples, device_vector<Feature>& d
 
 __global__ void doClassify (Sample* samples, int nSamples, DecisionStump* stumps, int nStumps, float* results) {
     int index = blockIdx.x * THREADS_PER_BLOCK + threadIdx.x;
-    if (index > nSamples) return;
+    if (index >= nSamples) return;
 
     float sum = 0.0;
     for (int i = 0; i < nStumps; i++) {
@@ -176,6 +201,8 @@ std::vector<float> Classifier::classify (device_vector<Sample>& samples) {
     device_vector<DecisionStump> d_stumps = this->weakLearners;
     device_vector<float> res(samples.size(), 233.3);
 
+    cudaDeviceSynchronize();
+
     doClassify <<< ceilf((float)samples.size() / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
                >>> (thrust::raw_pointer_cast(samples.data()), 
                     samples.size(),
@@ -186,10 +213,24 @@ std::vector<float> Classifier::classify (device_vector<Sample>& samples) {
     cudaDeviceSynchronize();
     CHECK(cudaPeekAtLastError());     
     
-    for (int i = 0; i < samples.size(); i++) {
-        std::cout << res[i] << std::endl;
+    std::vector<float> ret (res.begin(), res.end());
+    return ret;
+}
+
+std::vector<Sample> Classifier::getFaces(std::vector<Sample>& input) {
+    device_vector<Sample> d_input = input;
+    cudaDeviceSynchronize();
+    std::vector<float> values = classify(d_input);  
+    assert(values.size() == input.size());
+
+    std::vector<Sample> ret;
+    ret.reserve (input.size() / 2);
+
+    for (int i = 0; i < input.size(); i++) {
+        if (values[i] >= this->threshold) {
+            ret.push_back(input[i]);
+        }
     }
 
-    std::vector<float> ret (res.begin(), res.end());
     return ret;
 }

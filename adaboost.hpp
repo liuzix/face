@@ -42,8 +42,12 @@ struct DecisionStump : public Managed {
 
 struct Classifier {
     std::vector<DecisionStump> weakLearners;
-    int threshold;
+    float threshold;
+    float falsePositiveRate;
+
     std::vector<float> classify (device_vector<Sample>& samples);
+    float getErrorRate(std::vector<Sample>& samples, std::vector<float> results);
+    std::vector<Sample> getFaces (std::vector<Sample>& input);
 };
 
 
