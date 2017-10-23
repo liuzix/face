@@ -2,8 +2,10 @@
 #define cimg_use_jpeg
 
 #include <iostream>
+#include <vector>
 #include <CImg.h>
 #include <cuda_runtime.h>
+
 
 
 #include "cudaManaged.hpp"
@@ -66,3 +68,33 @@ JPEGImage::~JPEGImage () {
     cudaFree(this->integral);
 }
 
+JPEGImage::JPEGImage (CImg<unsigned char>& image, int x1, int y1) {
+    int x2 = x1 + 64;
+    int y2 = y1 + 64;
+
+    this->dimX = 64;
+    this->dimY = 64;
+
+    auto window = image.get_crop(x1, y1, x2, y2);
+    size_t s = sizeof(unsigned char) * window.size();
+    CHECK(cudaMallocManaged(&this->originalData, s));
+    memcpy(this->originalData, window.data(), s);
+    CHECK(cudaMallocManaged(&this->grayScaleData, s));
+
+    size_t si = window.size() * sizeof(unsigned int) / 3;
+    CHECK(cudaMallocManaged(&this->rows, si));
+    CHECK(cudaMallocManaged(&this->integral, si));
+}
+
+std::vector<JPEGImage> getWindows (const char* fileName) {
+    CImg<unsigned char> image(fileName);
+    std::vector<JPEGImage> ret;
+
+    for (int x = 0; x + 64 < image.width(); x+=3) {
+        for (int y = 0; x + 64 < image.height(); y+=3) {
+            ret.emplace_back(image, x, y);
+        }
+    }
+
+    return ret;
+}

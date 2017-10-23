@@ -240,3 +240,5 @@ std::vector<Sample> Classifier::getFaces(std::vector<Sample>& input) {
 
     return ret;
 }
+
+

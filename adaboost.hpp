@@ -13,7 +13,7 @@ class Sample {
     int dimX, dimY;
 public:
     int y;
-
+    int other_x, other_y;
     explicit Sample (JPEGImage& jpeg, int _y) {
         assert(jpeg.integrated);
         this->dimX = jpeg.dimX;

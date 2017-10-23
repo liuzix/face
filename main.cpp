@@ -2,6 +2,7 @@
 #include <string>
 #include <cuda.h>
 #include <math.h>
+#include <thrust/device_vector.h>
 #include <device_launch_parameters.h>
 
 #include "jpeg.hpp"
@@ -16,33 +17,55 @@ using namespace std;
 JPEGImage* faces;
 JPEGImage* nonfaces;
 
+/* The cuda kernel for transforming all images to greyscale */
+__global__ void batchToGray(JPEGImage* input, int nImages) {
+    int index = threadIdx.x + THREADS_PER_BLOCK * blockIdx.x;
+    if (index > nImages ) return;
+    input[index].toGray();
+    input[index].integrate();
+}
+
 void loadImages () {
     faces = new JPEGImage[NUM_IMAGES];
     for (int i = 0; i < NUM_IMAGES; i++) {
         faces[i].load((string("faces/face") + to_string(i) + ".jpg").c_str());
     }
 
-    batchToGray <<< ceilf((float)NUM_IMAGES / THREADS_PER_BLOCK), THREADS_PER_BLOCK >>> (faces);
+    batchToGray <<< ceilf((float)NUM_IMAGES / THREADS_PER_BLOCK), THREADS_PER_BLOCK >>> (faces, NUM_IMAGES);
 
     nonfaces = new JPEGImage[NUM_IMAGES];
     for (int i = 0; i < NUM_IMAGES; i++) {
         nonfaces[i].load((string("background/") + to_string(i) + ".jpg").c_str());
     }
 
-    batchToGray <<< ceilf((float)NUM_IMAGES / THREADS_PER_BLOCK), THREADS_PER_BLOCK >>> (nonfaces);
+    batchToGray <<< ceilf((float)NUM_IMAGES / THREADS_PER_BLOCK), THREADS_PER_BLOCK >>> (nonfaces, NUM_IMAGES);
 
     cudaDeviceSynchronize();
+    CHECK(cudaPeekAtLastError());
+}
+
+std::vector<Sample> getFinalSamples() {
+    auto jpegs = getWindows ("class.jpg");
+    thrust::device_vector<JPEGImage> d_jpegs = jpegs;
+    batchToGray <<<
+        ceilf((float)d_jpegs.size() / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
+        >>> (thrust::raw_pointer_cast(d_jpegs.data()), d_jpegs.size());
     
+    cudaDeviceSynchronize();
+    CHECK(cudaPeekAtLastError());
 
+    std::vector<Sample> ret;
+    for (int i = 0; i < d_jpegs.size(); i++) {
+        JPEGImage temp = d_jpegs[i];
+        ret.emplace_back(temp, 0);
+    }
+
+    return ret;
 }
 
-/* The cuda kernel for transforming all images to greyscale */
-__global__ void batchToGray(JPEGImage* input) {
-    int index = threadIdx.x + THREADS_PER_BLOCK * blockIdx.x;
-    if (index >  NUM_IMAGES ) return;
-    input[index].toGray();
-    input[index].integrate();
-}
+
+
+
 
 int main () {
     int deviceCount = 0;
@@ -51,6 +74,10 @@ int main () {
     cout << "Number of devices: " << deviceCount << endl;
     cout << "Loading and integrating images..." << endl;
     loadImages();
+
+    cout << "Getting final samples.." << endl;
+    std::vector<Sample> finalSamples = getFinalSamples();
+    cout << finalSamples.size() << endl;
 
     cout << "Generating features..." << endl;
     auto features = Feature::generate(64, 64);
@@ -73,6 +100,9 @@ int main () {
         Classifier new_layer = AdaBoostTrain(samples, features);
         samples = new_layer.getFaces(samples);
         cout << "remaining faces: " << samples.size() << endl;
+        if (samples.size() - NUM_IMAGES < 5) {
+            break;
+        }
     }
 
     

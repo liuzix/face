@@ -3,10 +3,12 @@
 
 #include <cstdlib>
 #include <cassert>
-
+#include <vector>
+#define cimg_use_jpeg 
+#include <CImg.h>
 
 #include "cudaManaged.hpp"
-
+using namespace cimg_library;
 
 /* This class provides the tool for accessing grey scale image */
 class JPEGImage : public Managed {
@@ -29,6 +31,8 @@ public:
         load (fileName);
     }
 
+    explicit JPEGImage (CImg<unsigned char>& image, int x1, int y1);
+
     void load (const char* fileName);
 
     __host__ __device__ void toGray();
@@ -43,7 +47,6 @@ public:
 
 };
 
-
-__global__ void batchToGray(JPEGImage* input);
+std::vector<JPEGImage> getWindows (const char* fileName) ;
 
 #endif
