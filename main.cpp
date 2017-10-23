@@ -47,6 +47,7 @@ void loadImages () {
 std::vector<Sample> getFinalSamples() {
     auto jpegs = getWindows ("class.jpg");
     thrust::device_vector<JPEGImage> d_jpegs = jpegs;
+    cout << d_jpegs.size() << endl;
     batchToGray <<<
         ceilf((float)d_jpegs.size() / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
         >>> (thrust::raw_pointer_cast(d_jpegs.data()), d_jpegs.size());

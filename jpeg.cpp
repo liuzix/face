@@ -66,6 +66,7 @@ JPEGImage::~JPEGImage () {
     cudaFree(this->grayScaleData);
     cudaFree(this->rows);
     cudaFree(this->integral);
+    CHECK(cudaPeekAtLastError());
 }
 
 JPEGImage::JPEGImage (CImg<unsigned char>& image, int x1, int y1) {
