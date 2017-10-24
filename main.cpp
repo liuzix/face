@@ -46,19 +46,22 @@ void loadImages () {
 
 std::vector<Sample> getFinalSamples() {
     auto jpegs = getWindows ("class.jpg");
-    thrust::device_vector<JPEGImage> d_jpegs = jpegs;
-    cout << d_jpegs.size() << endl;
+    JPEGImage* p_jpegs = new JPEGImage[jpegs.size()];
+
+    // I know this is not good practice....
+    memcpy(p_jpegs, jpegs.data(), sizeof (JPEGImage) * jpegs.size());
+
+    cout << jpegs.size() << endl;
     batchToGray <<<
-        ceilf((float)d_jpegs.size() / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
-        >>> (thrust::raw_pointer_cast(d_jpegs.data()), d_jpegs.size());
+        ceilf((float)jpegs.size() / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
+        >>> (p_jpegs, jpegs.size());
     
     cudaDeviceSynchronize();
     CHECK(cudaPeekAtLastError());
 
     std::vector<Sample> ret;
-    for (int i = 0; i < d_jpegs.size(); i++) {
-        JPEGImage temp = std::move(d_jpegs[i]);
-        ret.emplace_back(temp, 0);
+    for (int i = 0; i < jpegs.size(); i++) {
+        ret.emplace_back(p_jpegs[i], 0);
     }
 
     return ret;
