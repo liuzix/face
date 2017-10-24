@@ -23,6 +23,8 @@ public:
     int dimX = 0;
     int dimY = 0;
 
+    int other_x, other_y;
+
     JPEGImage () {};
 
     ~JPEGImage ();

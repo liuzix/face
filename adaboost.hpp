@@ -18,6 +18,8 @@ public:
         assert(jpeg.integrated);
         this->dimX = jpeg.dimX;
         this->dimY = jpeg.dimY;
+        this->other_x = jpeg.other_x;
+        this->other_y = jpeg.other_y;
         this->data = jpeg.integral;
         jpeg.integral = nullptr;
         y = _y;

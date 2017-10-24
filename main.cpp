@@ -51,7 +51,6 @@ std::vector<Sample> getFinalSamples() {
     // I know this is not good practice....
     memcpy(p_jpegs, jpegs.data(), sizeof (JPEGImage) * jpegs.size());
 
-    cout << jpegs.size() << endl;
     batchToGray <<<
         ceilf((float)jpegs.size() / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
         >>> (p_jpegs, jpegs.size());
@@ -79,9 +78,11 @@ int main () {
     cout << "Loading and integrating images..." << endl;
     loadImages();
 
+
     cout << "Getting final samples.." << endl;
     std::vector<Sample> finalSamples = getFinalSamples();
-    cout << finalSamples.size() << endl;
+    cout << "Number of windows = " << finalSamples.size() << endl;
+
 
     cout << "Generating features..." << endl;
     auto features = Feature::generate(64, 64);
@@ -104,11 +105,21 @@ int main () {
         Classifier new_layer = AdaBoostTrain(samples, features);
         samples = new_layer.getFaces(samples);
         cout << "remaining faces: " << samples.size() << endl;
-        if (samples.size() - NUM_IMAGES < 5) {
+        if (samples.size() - NUM_IMAGES < 20) {
             break;
         }
     }
 
+
+
+    for (Classifier& cl: layers) {
+        finalSamples = cl.getFaces(finalSamples);
+    }
+
+    for (Sample& s: finalSamples) {
+        cout << s.other_x << ", " << s.other_y << endl;
+    }
+    
     
     return 0;
 }

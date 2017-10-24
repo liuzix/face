@@ -74,13 +74,18 @@ JPEGImage::~JPEGImage () {
 }
 
 JPEGImage::JPEGImage (CImg<unsigned char>& image, int x1, int y1) {
-    int x2 = x1 + 64;
-    int y2 = y1 + 64;
+    int x2 = x1 + 63;
+    int y2 = y1 + 63;
 
     this->dimX = 64;
     this->dimY = 64;
 
-    auto window = image.get_crop(x1, y1, x2, y2);
+    this->other_x = x1;
+    this->other_y = y1;
+
+    auto window = image.get_crop(x1, y1, x2, y2 );
+    assert(window.width() == 64 && window.height() == 64);
+    
     size_t s = sizeof(unsigned char) * window.size();
     CHECK(cudaMallocManaged(&this->originalData, s));
     memcpy(this->originalData, window.data(), s);
@@ -95,8 +100,8 @@ std::vector<JPEGImage> getWindows (const char* fileName) {
     CImg<unsigned char> image(fileName);
     std::vector<JPEGImage> ret;
 
-    for (int x = 0; x + 64 < image.width(); x+=3) {
-        for (int y = 0; y + 64 < image.height(); y+=3) {
+    for (int x = 0; x + 64 < image.width(); x+=6) {
+        for (int y = 0; y + 64 < image.height(); y+=6) {
             ret.emplace_back(image, x, y);
         }
     }
