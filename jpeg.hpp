@@ -48,6 +48,9 @@ public:
         other.integral = nullptr;
     }
 
+    JPEGImage (const JPEGImage&) = default;
+    JPEGImage& operator=(const JPEGImage &) = default;
+
     void load (const char* fileName);
 
     __host__ __device__ void toGray();

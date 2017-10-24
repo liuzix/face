@@ -57,7 +57,7 @@ std::vector<Sample> getFinalSamples() {
 
     std::vector<Sample> ret;
     for (int i = 0; i < d_jpegs.size(); i++) {
-        JPEGImage temp = d_jpegs[i];
+        JPEGImage temp = std::move(d_jpegs[i]);
         ret.emplace_back(temp, 0);
     }
 

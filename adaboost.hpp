@@ -19,6 +19,7 @@ public:
         this->dimX = jpeg.dimX;
         this->dimY = jpeg.dimY;
         this->data = jpeg.integral;
+        jpeg.integral = nullptr;
         y = _y;
     }
 
