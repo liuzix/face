@@ -34,7 +34,7 @@ void loadImages () {
     batchToGray <<< ceilf((float)NUM_IMAGES / THREADS_PER_BLOCK), THREADS_PER_BLOCK >>> (faces, NUM_IMAGES);
     cudaDeviceSynchronize();
     CHECK(cudaPeekAtLastError());
-    
+
     nonfaces = new JPEGImage[NUM_IMAGES];
     for (int i = 0; i < NUM_IMAGES; i++) {
         nonfaces[i].load((string("background/") + to_string(i) + ".jpg").c_str());
@@ -48,11 +48,12 @@ void loadImages () {
 
 std::vector<Sample> getFinalSamples() {
     auto jpegs = getWindows ("class.jpg");
-    JPEGImage* p_jpegs = new JPEGImage[jpegs.size()];
+    JPEGImage* p_jpegs;
+    CHECK(cudaMallocManaged(&p_jpegs, jpegs.size() * sizeof (JPEGImage)));
 
     // I know this is not good practice....
     memcpy(p_jpegs, jpegs.data(), sizeof (JPEGImage) * jpegs.size());
-
+    cudaDeviceSynchronize();
     batchToGray <<<
         ceilf((float)jpegs.size() / THREADS_PER_BLOCK), THREADS_PER_BLOCK 
         >>> (p_jpegs, jpegs.size());
