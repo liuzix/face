@@ -43,11 +43,33 @@ public:
         integrated = other.integrated;
         dimX = other.dimX;
         dimY = other.dimY;
+        other_x = other.other_x;
+        other_y = other.other_y;
 
         other.originalData = nullptr;
         other.grayScaleData = nullptr;
         other.rows = nullptr;
         other.integral = nullptr;
+    }
+
+
+    JPEGImage &operator= (JPEGImage && other) {
+        originalData = other.originalData;
+        grayScaleData = other.grayScaleData;
+        rows = other.rows;
+        integral = other.integral;
+        integrated = other.integrated;
+        dimX = other.dimX;
+        dimY = other.dimY;
+        other_x = other.other_x;
+        other_y = other.other_y;
+
+        other.originalData = nullptr;
+        other.grayScaleData = nullptr;
+        other.rows = nullptr;
+        other.integral = nullptr;
+
+        return *this;
     }
 
     void load (const char* fileName);
