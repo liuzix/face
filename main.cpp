@@ -112,6 +112,7 @@ int main () {
         Classifier new_layer = AdaBoostTrain(samples, features);
         samples = new_layer.getFaces(samples);
         cout << "remaining faces: " << samples.size() << endl;
+        layers.push_back(new_layer);
         if (samples.size() - NUM_IMAGES < 20) {
             break;
         }
@@ -119,8 +120,9 @@ int main () {
 
 
 
-    for (Classifier& cl: layers) {
-        finalSamples = cl.getFaces(finalSamples);
+    for (int i = 0; i < layers.size(); i++) {
+        finalSamples = layers[i].getFaces(finalSamples);
+        cout << "Layer: " << i << ", remaining faces: " << finalSamples.size() << endl;
     }
 
     for (Sample& s: finalSamples) {
