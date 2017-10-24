@@ -32,7 +32,9 @@ void loadImages () {
     }
 
     batchToGray <<< ceilf((float)NUM_IMAGES / THREADS_PER_BLOCK), THREADS_PER_BLOCK >>> (faces, NUM_IMAGES);
-
+    cudaDeviceSynchronize();
+    CHECK(cudaPeekAtLastError());
+    
     nonfaces = new JPEGImage[NUM_IMAGES];
     for (int i = 0; i < NUM_IMAGES; i++) {
         nonfaces[i].load((string("background/") + to_string(i) + ".jpg").c_str());
@@ -82,7 +84,9 @@ int main () {
     cout << "Getting final samples.." << endl;
     std::vector<Sample> finalSamples = getFinalSamples();
     cout << "Number of windows = " << finalSamples.size() << endl;
-
+    for (Sample& s: finalSamples) {
+        cout << s.other_x << ", " << s.other_y << endl;
+    }
 
     cout << "Generating features..." << endl;
     auto features = Feature::generate(64, 64);
@@ -120,6 +124,6 @@ int main () {
         cout << s.other_x << ", " << s.other_y << endl;
     }
     
-    
+
     return 0;
 }
