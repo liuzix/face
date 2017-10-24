@@ -9,7 +9,7 @@
 #include "feature.hpp"
 #include "adaboost.hpp"
 
-#define NUM_IMAGES 750
+#define NUM_IMAGES 2000
 #define THREADS_PER_BLOCK 500
 
 using namespace std;
@@ -113,7 +113,7 @@ int main () {
         samples = new_layer.getFaces(samples);
         cout << "remaining faces: " << samples.size() << endl;
         layers.push_back(new_layer);
-        if (samples.size() - NUM_IMAGES < 20) {
+        if (samples.size() - NUM_IMAGES < 10) {
             break;
         }
     }
