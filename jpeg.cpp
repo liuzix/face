@@ -96,7 +96,7 @@ std::vector<JPEGImage> getWindows (const char* fileName) {
     std::vector<JPEGImage> ret;
 
     for (int x = 0; x + 64 < image.width(); x+=3) {
-        for (int y = 0; x + 64 < image.height(); y+=3) {
+        for (int y = 0; y + 64 < image.height(); y+=3) {
             ret.emplace_back(image, x, y);
         }
     }
